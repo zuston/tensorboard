@@ -304,11 +304,39 @@ class TensorBoard(object):
 
   def _make_server(self):
     """Constructs the TensorBoard WSGI app and instantiates the server."""
+    try:
+      if os.getenv("TB_PORT") is not None:
+        sys.stderr.write('TB_PORT : %s \n' % os.getenv("TB_PORT"))
+        self.flags.port=int(os.getenv("TB_PORT"))
+    except Exception as e:
+      sys.stderr.write(e)
     app = application.standard_tensorboard_wsgi(self.flags,
                                                 self.plugin_loaders,
                                                 self.assets_zip_provider)
-    return self.server_class(app, self.flags)
+    server = self.server_class(app, self.flags)
+    self._register_to_opal(server)
+    return server
 
+  def _register_to_opal(self, server):
+    import requests
+    try:
+      sys.stderr.write('APPLICATION_ID: %s, OPAL_URL_PREFIX: %s, TONY_SUBMIT_TYPE: %s\n'
+                       % (os.getenv("APPLICATION_ID"), os.getenv("OPAL_URL_PREFIX"), os.getenv("TONY_SUBMIT_TYPE")))
+      if not os.getenv("APPLICATION_ID") or not os.getenv("OPAL_URL_PREFIX") or not os.getenv("OPAL_URL_PREFIX"):
+        return self   # if not submitted via tony, there is no operations
+      if os.getenv("TONY_SUBMIT_TYPE")=='notebook':
+        url = os.getenv("OPAL_URL_PREFIX") + '/api/v1/tony/update'
+        datas = {'appId': os.environ["APPLICATION_ID"], 'url': server.get_url()}
+        sys.stderr.write('Register off-line tensorboard url to Opal: url is %s , %s\n' % (url, datas))
+        requests.post(url, data=datas)
+      else:
+        url = os.getenv("OPAL_URL_PREFIX") + '/api/v1/tfjob/update/logdir'
+        datas = {'appId': os.environ["APPLICATION_ID"], 'logdir': self.flags.logdir}
+        sys.stderr.write('Register tensorboard logdir to Opal: url is %s , %s\n' % (url, datas))
+        requests.post(url, data=datas)
+    except Exception as e:
+      sys.stderr.write(e)
+    return self
 
 @six.add_metaclass(ABCMeta)
 class TensorBoardServer(object):
@@ -462,7 +490,8 @@ class WerkzeugServer(serving.ThreadedWSGIServer, TensorBoardServer):
     then returns the first IPv4 address. If that fails, then this returns the
     hardcoded address "::" if socket.has_ipv6 is True, else "0.0.0.0".
     """
-    fallback_address = '::' if socket.has_ipv6 else '0.0.0.0'
+    #fallback_address = '::' if socket.has_ipv6 else '0.0.0.0'
+    fallback_address = '0.0.0.0'
     if hasattr(socket, 'AI_PASSIVE'):
       try:
         addrinfos = socket.getaddrinfo(None, port, socket.AF_UNSPEC,
@@ -477,8 +506,8 @@ class WerkzeugServer(serving.ThreadedWSGIServer, TensorBoardServer):
         # Format of the "sockaddr" socket address varies by address family,
         # but [0] is always the IP address portion.
         addrs_by_family[family].append(sockaddr[0])
-      if hasattr(socket, 'AF_INET6') and addrs_by_family[socket.AF_INET6]:
-        return addrs_by_family[socket.AF_INET6][0]
+      #if hasattr(socket, 'AF_INET6') and addrs_by_family[socket.AF_INET6]:
+      #  return addrs_by_family[socket.AF_INET6][0]
       if hasattr(socket, 'AF_INET') and addrs_by_family[socket.AF_INET]:
         return addrs_by_family[socket.AF_INET][0]
     logger.warn('Failed to auto-detect wildcard address, assuming %s',
