@@ -251,6 +251,10 @@ class TensorBoard(object):
     :rtype: str
     """
     # Make it easy to run TensorBoard inside other programs, e.g. Colab.
+    if os.getenv("TB_STARTED") is not None:
+      sys.stderr.write('Tensorboard has been started. TB_STARTED : %s \n' % os.getenv("TB_STARTED"))
+      return None
+    sys.stderr.write('Tensorboard has not been started. \n')
     server = self._make_server()
     thread = threading.Thread(target=server.serve_forever, name='TensorBoard')
     thread.daemon = True
@@ -314,6 +318,7 @@ class TensorBoard(object):
                                                 self.plugin_loaders,
                                                 self.assets_zip_provider)
     server = self.server_class(app, self.flags)
+    os.environ['TB_STARTED'] = 'true'
     self._register_to_opal(server)
     return server
 
