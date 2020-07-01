@@ -1,0 +1,39 @@
+stages:
+  - build
+  - deploy
+
+variables:
+  TENSORBOARD_VERSION: 1.14.0
+  JFROG_KEY: iqiyi-pypi-bigdata:83F3Fsuxh8Wg
+  JFROG_URL: http://jfrog.cloud.qiyi.domain/iqiyi-pypi-release/iqiyi-bigdata-tensorboard/$CI_COMMIT_REF_NAME/$CI_PIPELINE_ID
+
+build_tensorboard:
+  stage: build
+  image: docker-registry.qiyi.virtual/opal/opal_py36_tf1.14.0_centos7.0:0.1.0-tb
+  artifacts:
+    paths:
+      - tensorboard_pkg/
+  only:
+    - web
+  script:
+    - echo "build tensorboard....."
+    - bazel clean --expunge
+    - mkdir -p tensorboard_pkg
+    - bazel build tensorboard:tensorboard --host_javabase=@bazel_tools//tools/jdk:absolute_javabase --define=ABSOLUTE_JAVABASE=/usr/lib/jvm/jre-11-openjdk
+    - pip3 install virtualenv==16.0.0 --index-url http://jfrog.cloud.qiyi.domain/api/pypi/pypi/simple --trusted-host jfrog.cloud.qiyi.domain
+    - bazel run --host_javabase=@bazel_tools//tools/jdk:absolute_javabase --define=ABSOLUTE_JAVABASE=/usr/lib/jvm/jre-11-openjdk //tensorboard/pip_package:build_pip_package -- --no-smoke
+    - cp -r /tmp/tensorboard/dist/* tensorboard_pkg/
+
+deploy_tensorboard:
+  stage: deploy
+  dependencies:
+    - build_tensorboard
+  only:
+    - web
+  variables:
+    PY27_WHEEL_NAME: tensorboard-${TENSORBOARD_VERSION}-py2-none-any.whl
+    PY36_WHEEL_NAME: tensorboard-${TENSORBOARD_VERSION}-py3-none-any.whl
+  script:
+    - cd tensorboard_pkg
+    - curl -X PUT -u $JFROG_KEY "${JFROG_URL}/${PY27_WHEEL_NAME}" -T ${PY27_WHEEL_NAME}
+    - curl -X PUT -u $JFROG_KEY "${JFROG_URL}/${PY36_WHEEL_NAME}" -T ${PY36_WHEEL_NAME}

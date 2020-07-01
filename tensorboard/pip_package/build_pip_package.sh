@@ -103,19 +103,18 @@ find tensorboard -name \*.py |
     s/from tensorflow_serving/from tensorboard._vendor.tensorflow_serving/
   '
 
-virtualenv venv
-export VIRTUAL_ENV=venv
-export PATH="$PWD/venv/bin:${PATH}"
-unset PYTHON_HOME
-
 # Require wheel for bdist_wheel command, and setuptools 36.2.0+ so that
 # env markers are handled (https://github.com/pypa/setuptools/pull/1081)
-pip install -qU wheel 'setuptools>=36.2.0'
+#pip3 install -qU wheel 'setuptools>=36.2.0'
 
 python setup.py bdist_wheel --python-tag py2 >/dev/null
 python setup.py bdist_wheel --python-tag py3 >/dev/null
 
 smoke() {
+  virtualenv venv
+  export VIRTUAL_ENV=venv
+  export PATH="$PWD/venv/bin:${PATH}"
+  unset PYTHON_HOME
   py_major_version="$1"
   if [ -z "${py_major_version}" ]; then
     py_major_version="$(python -c 'import sys; print(sys.version_info[0])')"
