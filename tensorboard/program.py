@@ -520,6 +520,9 @@ class WerkzeugServer(serving.ThreadedWSGIServer, TensorBoardServer):
     return fallback_address
 
   def server_bind(self):
+    if os.getenv("TB_SERVER_REUSE_PORT", "false").lower() == "true":
+      self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+
     """Override to enable IPV4 mapping for IPV6 sockets when desired.
 
     The main use case for this is so that when no host is specified, TensorBoard
